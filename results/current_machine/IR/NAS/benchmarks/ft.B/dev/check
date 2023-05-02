@@ -1,0 +1,44 @@
+#!/bin/bash -e
+
+# ./check baseline_with_metadata.bc -o output.bc -noelle-nondeterministic-prvgs -noelle-verbose=3 -noelle-pdg-verbose=1 -noelle-min-hot=1 -noelle-max-cores=8 -noelle-inliner-avoid-hoist-to-main -noelle-disable-whilifier -noelle-disable-helix -noelle-disable-dswp
+# time ./binary
+
+inputIR=$1
+afterLoopMetadata="afterLoopMetadata.bc"
+intermediateResult="baseline_with_parallel_plan.bc" ;
+intermediateResult_unoptimized="parallelized_unoptimized.bc" ;
+outputIR=$3
+
+
+# Step 3: Run loop parallelization on bitcode with parallel plan
+cmdToExecute="noelle-parallelizer-loop code_to_parallelize.ll -o ${intermediateResult_unoptimized} ${@:4}" ;
+echo $cmdToExecute ;
+eval $cmdToExecute ;
+
+# Step 4: cleaning the metadata that are now disaligned with the code
+cmdToExecute="noelle-meta-clean ${intermediateResult_unoptimized} ${intermediateResult_unoptimized}" ;
+echo $cmdToExecute ;
+eval $cmdToExecute ;
+
+# Step 5: conventional optimizations
+cmdToExecute="clang -O3 -c -emit-llvm ${intermediateResult_unoptimized} -o ${outputIR}" ;
+echo $cmdToExecute ;
+eval $cmdToExecute ;
+
+# Step 6: Link with the runtime
+llvm-link ${outputIR} Parallelizer_utils.bc -o ${outputIR} ;
+
+# Step 7: conventional optimizations
+cmdToExecute="clang -O3 -c -emit-llvm ${outputIR} -o ${outputIR}" ;
+echo $cmdToExecute ;
+eval $cmdToExecute ;
+
+# Step 7.5: to ll
+cmdToExecute="llvm-dis ${outputIR}" ;
+echo $cmdToExecute ;
+eval $cmdToExecute ;
+
+# Step 8: to binary
+cmdToExecute="clang++ ${outputIR} -pthreads -O3 -lm -lstdc++ -lpthread -o binary" ;
+echo $cmdToExecute ;
+eval $cmdToExecute ;

@@ -1,0 +1,29 @@
+#!/bin/bash -e
+
+# ./shrink baseline_with_metadata.bc -o output.bc -noelle-nondeterministic-prvgs -noelle-verbose=3 -noelle-pdg-verbose=1 -noelle-min-hot=1 -noelle-max-cores=8 -noelle-inliner-avoid-hoist-to-main -noelle-disable-whilifier -noelle-disable-helix -noelle-disable-dswp
+
+inputIR=$1
+afterLoopMetadata="afterLoopMetadata.bc"
+intermediateResult="baseline_with_parallel_plan.bc" ;
+intermediateResult_unoptimized="parallelized_unoptimized.bc" ;
+outputIR=$3
+
+
+# Step 0: Add loop ID to all loops
+cmdToExecute="noelle-meta-loop-embed ${inputIR} -o ${afterLoopMetadata}"
+echo $cmdToExecute ;
+eval $cmdToExecute ;
+
+# Step 1: Run parallelization planner
+cmdToExecute="noelle-parallelization-planner ${afterLoopMetadata} -o ${intermediateResult} ${@:4}" ;
+echo $cmdToExecute ;
+eval $cmdToExecute ;
+
+# Step 2: Include function prototypes needed by parallelization techniques
+clang -c -emit-llvm NOELLE_APIs.c ;
+llvm-link NOELLE_APIs.bc ${intermediateResult} -o code_with_prototypes.bc ;
+cmdToExecute="noelle-rm-function -function-name=SIMONE_CAMPANONI_IS_GOING_TO_REMOVE_THIS_FUNCTION code_with_prototypes.bc -o code_to_parallelize.bc" ;
+echo $cmdToExecute ;
+eval $cmdToExecute ;
+
+llvm-dis code_to_parallelize.bc
